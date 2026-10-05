@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "schema": 1,
+    "generated_at": null,
+    "run_type": null,
+    "counts": {},
+    "total_symbols": 0,
+    "active_symbols": 0,
+    "store_bars": 35,
+    "fresh_fade_bars": 20,
+    "window_options": [
+      3,
+      6,
+      7,
+      10,
+      14,
+      20,
+      35
+    ],
+    "top_board_window": 20,
+    "top_board_size": 20,
+    "csv_problems": [],
+    "note": "Placeholder. The first run of the 'Scan market' workflow replaces this file."
+  },
+  "stocks": []
+}

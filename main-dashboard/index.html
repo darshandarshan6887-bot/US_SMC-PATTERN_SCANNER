@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pattern Scanner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="banner err hidden" id="errBanner"></div>
+<div class="banner hidden" id="staleBanner"></div>
+<div class="wrap">
+
+<header class="top">
+  <div>
+    <h1>Pattern Scanner</h1>
+    <p>1-hour candles, regular US session, closed candles only. SMC structure with candlestick, squeeze and volume signals.</p>
+  </div>
+  <div class="refresh">
+    <div>Last refresh <strong id="refreshIST">loading…</strong></div>
+    <div id="refreshSub"></div>
+    <button class="theme-btn" id="themeBtn" type="button">Switch theme</button>
+  </div>
+</header>
+
+<section class="stats" id="stats" aria-label="Scan summary"></section>
+
+<div class="tabs" role="tablist">
+  <button class="tab" role="tab" aria-selected="true" data-tab="scanner">Scanner</button>
+  <button class="tab" role="tab" aria-selected="false" data-tab="feed">Signal feed<span class="count" id="feedCount"></span></button>
+  <button class="tab" role="tab" aria-selected="false" data-tab="watch">Watchlist<span class="count" id="watchCount"></span></button>
+</div>
+
+<section class="filters" aria-label="Filters">
+  <div class="field"><label for="fSearch">Symbol or name</label><input id="fSearch" type="search" placeholder="Search"></div>
+  <div class="field"><label for="fType">Type</label><select id="fType"><option value="">All</option><option>Stock</option><option>ETF</option></select></div>
+  <div class="field"><label for="fSmc">SMC trend</label><select id="fSmc"><option value="">Any</option><option value="BULLISH">Bullish</option><option value="BEARISH">Bearish</option></select></div>
+  <div class="field"><label for="fDir">Signal direction</label><select id="fDir"><option value="">Any</option><option value="bull">Bullish</option><option value="bear">Bearish</option><option value="neutral">Neutral</option></select></div>
+  <div class="field"><label for="fGroup">Signal group</label><select id="fGroup"><option value="">All groups</option></select></div>
+  <div class="field"><label for="fPat">Signal</label><select id="fPat"><option value="">All signals</option></select></div>
+  <div class="field"><label for="fWin">Formed within last</label><select id="fWin"></select></div>
+  <div class="field"><label for="fConf">Min confluence <span class="val" id="fConfVal">0</span></label><input id="fConf" type="range" min="0" max="90" step="5" value="0"></div>
+  <div class="field"><label for="fStatus">Data status</label><select id="fStatus"><option value="">Any</option><option>OK</option><option>STALE</option></select></div>
+  <div class="field check"><label><input id="fOnly" type="checkbox" checked> Only symbols with a signal</label></div>
+  <div class="actions"><button class="btn" id="fReset" type="button">Reset filters</button></div>
+</section>
+
+<div id="viewScanner">
+  <section class="boards" id="boards"></section>
+  <section class="card">
+    <div class="scroll"><table id="tbl"><thead><tr id="thead"></tr></thead><tbody id="tbody"></tbody></table></div>
+    <div class="empty hidden" id="emptyScanner"></div>
+    <div class="pager"><span class="muted small" id="pagerInfo"></span><div class="btns"><button class="btn" id="prev" type="button">Previous</button><button class="btn" id="next" type="button">Next</button></div></div>
+  </section>
+</div>
+
+<div id="viewFeed" class="hidden"><section class="card"><ul class="feed" id="feed"></ul><div class="empty hidden" id="emptyFeed"><b>No signals in this window</b>Try a longer candle window or reset the filters.</div></section></div>
+
+<div id="viewWatch" class="hidden"><section class="card"><div class="scroll"><table id="tblWatch"><thead><tr id="theadW"></tr></thead><tbody id="tbodyW"></tbody></table></div>
+  <div class="empty hidden" id="emptyWatch"><b>Your watchlist is empty</b>Select the star next to a symbol in the Scanner tab. Stars are saved in this browser only.</div></section></div>
+
+<details class="issues" id="issues" hidden>
+  <summary id="issuesSummary"></summary>
+  <div class="body">
+    <p class="muted small">These symbols are not in the table above. Fix them in <code>shared-data/symbols.csv</code> (the <code>Yahoo Symbol</code> and <code>Active</code> columns) and the next run picks the change up.</p>
+    <div class="scroll"><table><thead><tr><th>Symbol</th><th>Yahoo symbol</th><th>Status</th><th>Detail</th></tr></thead><tbody id="issuesBody"></tbody></table></div>
+    <p class="muted small" id="csvProblems"></p>
+  </div>
+</details>
+
+</div>
+<script src="../assets/common.js"></script>
+<script>
+let DATA = null, LIVE = [], META = {};
+let watch = getWatch();
+const state = { tab: 'scanner', sort: {key: 'conf', dir: -1}, page: 1, per: 25, open: null,
+  f: {q:'', type:'', smc:'', dir:'', group:'', pat:'', win:10, conf:0, status:'', only:true} };
+const $ = (s, r=document) => r.querySelector(s);
+
+/* ---------- derived per-stock view for the current filters ---------- */
+function view(s){
+  const f = state.f;
+  let sigs = signalsIn(s, f.win);
+  if (f.dir) sigs = sigs.filter(g => g.dir === f.dir);
+  if (f.group) sigs = sigs.filter(g => g.group === f.group);
+  if (f.pat) sigs = sigs.filter(g => g.name === f.pat);
+  const best = bestOf(sigs);
+  return { s, sigs, best, conf: best ? best.score : 0 };
+}
+function filtered(list){
+  const f = state.f, q = f.q.trim().toLowerCase();
+  const narrowed = !!(f.dir || f.group || f.pat);
+  return list.map(view).filter(x =>
+    (!q || x.s.symbol.toLowerCase().includes(q) || (x.s.name || '').toLowerCase().includes(q))
+    && (!f.type || x.s.type === f.type) && (!f.smc || (x.s.smc && x.s.smc.trend === f.smc))
+    && (!f.status || x.s.scanner_status === f.status)
+    && ((f.only || narrowed) ? x.sigs.length > 0 : true)
+    && x.conf >= f.conf);
+}
+
+/* ---------- cells ---------- */
+function smcCell(s){
+  const m = s.smc || {}, t = m.trend;
+  if (t !== 'BULLISH' && t !== 'BEARISH') return '<span class="muted small">Unknown</span>';
+  const ev = m.structure_event && m.structure_event !== 'NONE' ? esc(m.structure_event) + (m.structure_bars_since >= 0 ? ', ' + m.structure_bars_since + ' ago' : '') : '';
+  return '<span class="pill ' + (t === 'BULLISH' ? 'bull' : 'bear') + '">' + (t === 'BULLISH' ? 'Bullish' : 'Bearish') + '</span> <span class="muted small">' + ev + '</span>';
+}
+function patCell(x){
+  if (!x.best) return '<span class="muted">No signal in window</span>';
+  const b = x.best, more = x.sigs.length - 1;
+  return '<div class="patcell ' + b.dir + '"><b>' + esc(b.name) + '</b><span>' + esc(fmtTime(b.time)) + ', ' + agoText(b.since) + (more > 0 ? ' · +' + more + ' more' : '') + '</span></div>';
+}
+function sqCell(c){ c = c || {}; const st = c.squeeze_state, n = (c.compression_layers || []).length;
+  const base = st === 'on' ? '<span class="pill neutral">Squeeze on</span>' : st === 'fired' ? '<span class="pill bull">Squeeze fired</span>' : '<span class="muted small">Off</span>';
+  return base + (n >= 3 ? ' <span class="muted small" title="Compression layers on: ' + esc((c.compression_layers||[]).join(', ')) + '">' + n + ' layers</span>' : ''); }
+function rvCell(c){ const v = c && c.rel_volume; if (v == null) return '<span class="muted">–</span>';
+  const cls = v >= 1.5 ? 'bull' : v <= 0.7 ? 'neutral' : 'none', txt = v >= 1.5 ? 'Spike' : v <= 0.7 ? 'Dry-up' : 'Normal';
+  return v.toFixed(2) + 'x <span class="pill ' + cls + '">' + txt + '</span>'; }
+function confCell(n, dir){ if (!n) return '<span class="muted">0</span>';
+  return '<div class="conf"><div class="bar"><i style="width:' + n + '%;background:var(--' + colorVar(dir) + ')"></i></div><span class="n">' + n + '</span></div>'; }
+function statusCell(s){ return s.scanner_status === 'OK' ? '<span class="pill none">OK</span>'
+  : '<span class="pill neutral" title="' + esc(s.scan_error || 'Last scan failed') + '. Showing the previous good result from ' + esc(s.scanned_at || '?') + '.">Stale</span>'; }
+
+function detailHtml(x){
+  const s = x.s, sigs = (s.signals || []).slice().sort((a,b) => a.since - b.since || b.score - a.score), top = x.best || bestOf(sigs), c = s.context || {}, m = s.smc || {};
+  let h = '<div class="detail"><div class="detail-grid"><div><h3>All signals, last ' + (META.store_bars || 35) + ' candles</h3>';
+  if (!sigs.length) h += '<p class="muted">Nothing fired.</p>';
+  else {
+    h += '<div class="scroll"><table class="sig-table"><thead><tr><th>Signal</th><th>Direction</th><th>Formed (candle start)</th><th class="num">Ago</th><th class="num">Stop ref.</th><th>Confirmation</th><th class="num">Score</th></tr></thead><tbody>';
+    sigs.forEach(g => {
+      const extra = g.zone ? ' <span class="muted small">gap ' + money(g.zone[0]) + ' to ' + money(g.zone[1]) + ', ' + esc(g.status) + '</span>' : g.price_vs_cloud ? ' <span class="muted small">price ' + esc(g.price_vs_cloud) + ' cloud</span>' : '';
+      const cf = g.confirm ? '<span class="pill ' + (g.confirm === 'confirmed' ? 'bull' : g.confirm === 'failed' ? 'bear' : 'none') + '">' + esc(g.confirm) + '</span>' : '<span class="muted">n/a</span>';
+      h += '<tr><td>' + esc(g.name) + extra + '</td><td><span class="pill ' + g.dir + '">' + dirLabel(g.dir) + '</span></td><td>' + esc(fmtTime(g.time)) + '</td><td class="num">' + g.since + '</td><td class="num">' + (g.stop != null ? '$' + money(g.stop) : '<span class="muted">n/a</span>') + '</td><td>' + cf + '</td><td class="num">' + g.score + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+  }
+  h += '<p class="small muted" style="margin:10px 0 0">Times are candle start times in ' + esc(tzShort(s.tz)) + '. A candlestick signal still marked <em>pending</em> has not yet been confirmed by a later close beyond its extreme, which the Handbook treats as the safer entry. · ' +
+       '<a href="' + esc(safeUrl(s.tradingview_url)) + '" target="_blank" rel="noopener">Open on TradingView</a> · <a href="../stock/index.html?symbol=' + encodeURIComponent(s.symbol) + '">Stock detail page</a></p></div><div>';
+  h += '<h3>Why this score' + (top ? ' (' + esc(top.name) + ')' : '') + '</h3>';
+  if (top && top.parts) PART_LABELS.forEach(([k, label, max], i) => { const v = top.parts[i]; h += '<div class="break"><span>' + label + '</span><div class="b"><i style="width:' + (v / max * 100) + '%"></i></div><span>' + v + '/' + max + '</span></div>'; });
+  else h += '<p class="muted">Nothing to score.</p>';
+  h += '<h3 style="margin-top:14px">SMC</h3><dl class="kv"><dt>Top signal</dt><dd>' + esc((m.top_signal || 'NO_SIGNAL').replace('_',' ').toLowerCase()) + '</dd><dt>Bottom signal</dt><dd>' + esc((m.bottom_signal || 'NO_SIGNAL').replace('_',' ').toLowerCase()) + '</dd></dl>';
+  h += '<h3 style="margin-top:14px">Readings</h3><dl class="kv"><dt>ADX</dt><dd>' + (c.adx ?? '–') + ' ' + esc(c.adx_state || '') + '</dd><dt>OBV</dt><dd>' + esc(c.obv_divergence || '–') + ' divergence</dd><dt>A/D line</dt><dd>' + esc(c.ad_divergence || '–') + ' divergence</dd><dt>CMF</dt><dd>' + (c.cmf ?? '–') + ' ' + esc(c.cmf_state || '') + '</dd><dt>Layers on</dt><dd>' + ((c.compression_layers || []).join(', ') || 'none') + '</dd></dl>';
+  return h + '</div></div></div>';
+}
+
+/* ---------- table ---------- */
+const COLS = [
+  {k:'star', t:'', sort:false}, {k:'sym', t:'Symbol'}, {k:'price', t:'Price', num:true}, {k:'smc', t:'SMC trend'},
+  {k:'pat', t:'Latest signal'}, {k:'strip', t:'Last 14 candles', sort:false}, {k:'sq', t:'Squeeze'},
+  {k:'rv', t:'Relative volume', num:true}, {k:'conf', t:'Confluence'}, {k:'status', t:'Status'}
+];
+function head(id){
+  $(id).innerHTML = COLS.map(c => {
+    const on = state.sort.key === c.k, aria = on ? (state.sort.dir > 0 ? 'ascending' : 'descending') : 'none';
+    if (c.sort === false) return '<th>' + c.t + '</th>';
+    return '<th class="' + (c.num ? 'num' : '') + '" aria-sort="' + aria + '"><button type="button" data-sort="' + c.k + '">' + c.t + ' <span class="arrow">' + (on ? (state.sort.dir > 0 ? '▲' : '▼') : '▲') + '</span></button></th>';
+  }).join('');
+}
+const sortVal = {
+  sym: x => x.s.symbol, price: x => x.s.price, smc: x => (x.s.smc || {}).trend || '', pat: x => x.best ? x.best.since : 99,
+  sq: x => ({fired:2, on:1, off:0})[(x.s.context || {}).squeeze_state] ?? 0, rv: x => (x.s.context || {}).rel_volume ?? -1,
+  conf: x => x.conf, status: x => x.s.scanner_status
+};
+function rowsHtml(list){
+  return list.map(x => {
+    const r = x.s, starred = watch.includes(r.symbol), open = state.open === r.symbol, chg = r.change_pct;
+    let h = '<tr class="row" data-sym="' + esc(r.symbol) + '" aria-expanded="' + open + '">' +
+      '<td><button class="star" type="button" aria-pressed="' + starred + '" aria-label="' + (starred ? 'Remove ' : 'Add ') + esc(r.symbol) + (starred ? ' from' : ' to') + ' watchlist" data-star="' + esc(r.symbol) + '">' + (starred ? '★' : '☆') + '</button></td>' +
+      '<td class="symcell"><b>' + esc(r.symbol) + '</b><span title="' + esc(r.name) + '">' + esc(r.name) + ' · ' + esc(r.type) + '</span></td>' +
+      '<td class="num">$' + money(r.price) + '<br>' + (chg == null ? '' : '<span class="small" style="color:var(--' + (chg >= 0 ? 'bull' : 'bear') + ')">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</span>') + '</td>' +
+      '<td>' + smcCell(r) + '</td><td>' + patCell(x) + '</td><td>' + strip(r, x.best) + '</td><td>' + sqCell(r.context) + '</td>' +
+      '<td class="num">' + rvCell(r.context) + '</td><td>' + confCell(x.conf, x.best && x.best.dir) + '</td><td>' + statusCell(r) + '</td></tr>';
+    if (open) h += '<tr class="detail"><td colspan="' + COLS.length + '">' + detailHtml(x) + '</td></tr>';
+    return h;
+  }).join('');
+}
+function sortList(list){
+  const g = sortVal[state.sort.key], dir = state.sort.dir;
+  return list.sort((a, b) => { const va = g(a), vb = g(b); return (va < vb ? -1 : va > vb ? 1 : 0) * dir || a.s.symbol.localeCompare(b.s.symbol); });
+}
+function renderScanner(){
+  head('#thead');
+  const list = sortList(filtered(LIVE));
+  const pages = Math.max(1, Math.ceil(list.length / state.per)); if (state.page > pages) state.page = pages;
+  const start = (state.page - 1) * state.per, slice = list.slice(start, start + state.per);
+  $('#tbody').innerHTML = rowsHtml(slice);
+  const empty = $('#emptyScanner');
+  empty.classList.toggle('hidden', list.length > 0); $('#tbl').classList.toggle('hidden', list.length === 0);
+  if (!list.length) empty.innerHTML = LIVE.length ? '<b>No symbols match these filters</b>Widen the candle window, lower the minimum confluence, or untick "Only symbols with a signal".'
+    : '<b>No scan results yet</b>Run the “Scan market” workflow once on GitHub (Actions tab), then reload this page.';
+  $('#pagerInfo').textContent = list.length ? 'Showing ' + (start + 1) + ' to ' + (start + slice.length) + ' of ' + list.length + ' symbols' : '0 symbols';
+  $('#prev').disabled = state.page <= 1; $('#next').disabled = state.page >= pages;
+}
+
+/* ---------- top boards (not affected by the filter bar) ---------- */
+function renderBoards(){
+  const win = META.top_board_window || 20, size = META.top_board_size || 20;
+  const pick = d => LIVE.map(s => { const b = bestOf(signalsIn(s, win).filter(g => g.dir === d)); return b ? {s, best: b} : null; })
+    .filter(Boolean).sort((a, b) => b.best.score - a.best.score || a.best.since - b.best.since).slice(0, size);
+  const mk = (d, title) => { const items = pick(d);
+    return '<div class="board"><h2 class="' + d + '">' + title + '</h2><p class="sub">Highest confluence score, last ' + win + ' candles. Click a row to open it.</p><ol>' +
+      (items.length ? items.map(x => '<li data-open="' + esc(x.s.symbol) + '"><span class="sym" title="' + esc(x.s.name) + '">' + esc(x.s.symbol) + '</span><span class="pat"><b>' + esc(x.best.name) + '</b>' + agoText(x.best.since) + '</span>' + strip(x.s, x.best) + '<span class="score" style="color:var(--' + (d === 'bull' ? 'bull' : 'bear') + ')">' + x.best.score + '</span></li>').join('') : '<li><span class="muted">None right now</span></li>') + '</ol></div>'; };
+  $('#boards').innerHTML = mk('bull', 'Top bullish setups') + mk('bear', 'Top bearish setups');
+}
+
+/* ---------- stats / header / issues ---------- */
+function renderHeader(){
+  $('#refreshIST').textContent = META.generated_ist || 'no scan yet';
+  const rt = META.run_type === 'mid-session' ? 'mid-session run (current candle excluded)' : META.run_type === 'after-close' ? 'after-close run' : 'run';
+  $('#refreshSub').textContent = (META.generated_et ? META.generated_et + ' · ' : '') + rt + (META.latest_candle ? ' · latest candle ' + fmtTime(META.latest_candle) : '');
+  if (META.generated_at){
+    const hrs = (Date.now() - Date.parse(META.generated_at)) / 36e5;
+    if (hrs > 30) { const b = $('#staleBanner'); b.textContent = 'This data is ' + Math.round(hrs) + ' hours old. The scheduled run may have stopped. Check the Actions tab on GitHub.'; b.classList.remove('hidden'); }
+  }
+}
+function renderStats(){
+  const win = 3, fresh = d => LIVE.filter(s => signalsIn(s, win).some(g => g.dir === d)).length;
+  const c = META.counts || {}, stale = c.STALE || 0, sq = LIVE.filter(s => (s.context || {}).squeeze_state === 'on' || (s.context || {}).squeeze_state === 'fired').length;
+  const issues = (DATA.stocks.length - LIVE.length);
+  $('#stats').innerHTML =
+    '<div class="stat"><b>' + LIVE.length + '</b><span>symbols scanned, of ' + (META.total_symbols ?? DATA.stocks.length) + ' in your list</span></div>' +
+    '<div class="stat warn"><b>' + stale + '</b><span>stale (showing last good result)</span></div>' +
+    '<div class="stat bull"><b>' + fresh('bull') + '</b><span>bullish signal in last 3 candles</span></div>' +
+    '<div class="stat bear"><b>' + fresh('bear') + '</b><span>bearish signal in last 3 candles</span></div>' +
+    '<div class="stat"><b>' + sq + '</b><span>in a squeeze, or just fired</span></div>' +
+    '<div class="stat warn"><b>' + issues + '</b><span>not scanned (see Data issues)</span></div>';
+}
+function renderIssues(){
+  const bad = DATA.stocks.filter(s => !isLive(s) || s.scanner_status === 'STALE');
+  const probs = META.csv_problems || [];
+  $('#issues').hidden = !(bad.length || probs.length);
+  $('#issuesSummary').textContent = 'Data issues (' + bad.length + ' symbols' + (probs.length ? ', ' + probs.length + ' CSV problems' : '') + ')';
+  const label = {INACTIVE:'Switched off', NO_DATA:'No Yahoo data', ERROR:'Download error', INSUFFICIENT_DATA:'Too few candles', PENDING_SCAN:'Waiting for first scan', STALE:'Stale'};
+  $('#issuesBody').innerHTML = bad.map(s => '<tr><td>' + esc(s.symbol) + '</td><td>' + esc(s.yahoo_symbol) + '</td><td>' + esc(label[s.scanner_status] || s.scanner_status) + '</td><td class="muted small">' + esc(s.scan_error || s.notes || '') + '</td></tr>').join('');
+  $('#csvProblems').textContent = probs.length ? 'symbols.csv: ' + probs.join(' · ') : '';
+}
+
+/* ---------- feed + watchlist ---------- */
+function renderFeed(){
+  const f = state.f, q = f.q.trim().toLowerCase(), items = [];
+  LIVE.forEach(s => {
+    if (q && !(s.symbol.toLowerCase().includes(q) || (s.name || '').toLowerCase().includes(q))) return;
+    if (f.type && s.type !== f.type) return; if (f.smc && (s.smc || {}).trend !== f.smc) return; if (f.status && s.scanner_status !== f.status) return;
+    signalsIn(s, f.win).forEach(g => { if ((!f.dir || g.dir === f.dir) && (!f.group || g.group === f.group) && (!f.pat || g.name === f.pat) && g.score >= f.conf) items.push({s, g}); });
+  });
+  items.sort((a, b) => a.g.since - b.g.since || b.g.score - a.g.score);
+  $('#feedCount').textContent = ' ' + items.length;
+  const shown = items.slice(0, 400);
+  $('#feed').innerHTML = shown.map(({s, g}) => '<li data-open="' + esc(s.symbol) + '"><b>' + esc(s.symbol) + '</b><span class="pill ' + g.dir + '">' + dirLabel(g.dir) + '</span><span>' + esc(g.name) + ' <span class="muted small">with SMC ' + esc(((s.smc || {}).trend || 'unknown').toLowerCase()) + '</span></span><span class="when">' + esc(fmtTime(g.time)) + ', ' + agoText(g.since) + ' · score ' + g.score + '</span></li>').join('')
+    + (items.length > shown.length ? '<li class="muted small" style="cursor:default">Showing the newest ' + shown.length + ' of ' + items.length + '. Narrow the filters to see the rest.</li>' : '');
+  $('#emptyFeed').classList.toggle('hidden', items.length > 0);
+}
+function renderWatch(){
+  $('#watchCount').textContent = watch.length ? ' ' + watch.length : '';
+  head('#theadW');
+  const have = LIVE.filter(s => watch.includes(s.symbol));
+  const list = sortList(have.map(view));   // the watchlist shows every starred symbol, filters only change the signal shown
+  $('#tbodyW').innerHTML = rowsHtml(list);
+  $('#emptyWatch').classList.toggle('hidden', have.length > 0); $('#tblWatch').classList.toggle('hidden', have.length === 0);
+}
+function renderAll(){ renderScanner(); renderFeed(); renderWatch(); }
+
+/* ---------- events ---------- */
+function setTab(t){
+  state.tab = t;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
+  $('#viewScanner').classList.toggle('hidden', t !== 'scanner'); $('#viewFeed').classList.toggle('hidden', t !== 'feed'); $('#viewWatch').classList.toggle('hidden', t !== 'watch');
+}
+document.addEventListener('click', e => {
+  const tab = e.target.closest('.tab'); if (tab) { setTab(tab.dataset.tab); return; }
+  const star = e.target.closest('[data-star]');
+  if (star) { const s = star.dataset.star; watch = watch.includes(s) ? watch.filter(x => x !== s) : watch.concat(s); setWatch(watch); renderAll(); return; }
+  const sb = e.target.closest('[data-sort]');
+  if (sb) { const k = sb.dataset.sort; state.sort = state.sort.key === k ? {key: k, dir: -state.sort.dir} : {key: k, dir: ['sym','status','smc','pat'].includes(k) ? 1 : -1}; state.page = 1; renderAll(); return; }
+  const open = e.target.closest('[data-open]');
+  if (open) { const sym = open.dataset.open; state.f.q = sym; $('#fSearch').value = sym; state.open = sym; state.page = 1; state.f.only = false; $('#fOnly').checked = false; setTab('scanner'); renderAll(); window.scrollTo({top: $('#viewScanner').offsetTop - 80, behavior: 'smooth'}); return; }
+  if (e.target.closest('a')) return;
+  const row = e.target.closest('tr.row');
+  if (row) { const s = row.dataset.sym; state.open = state.open === s ? null : s; renderAll(); }
+});
+function bind(id, key, num){ $(id).addEventListener('input', e => { state.f[key] = num ? Number(e.target.value) : e.target.value; state.page = 1; if (key === 'conf') $('#fConfVal').textContent = e.target.value; renderAll(); }); }
+function resetFilters(){
+  state.f = {q:'', type:'', smc:'', dir:'', group:'', pat:'', win: (META.window_options || [10]).includes(10) ? 10 : META.window_options[0], conf:0, status:'', only:true};
+  state.open = null; state.page = 1;
+  ['#fSearch','#fType','#fSmc','#fDir','#fGroup','#fPat','#fStatus'].forEach(i => $(i).value = '');
+  $('#fWin').value = String(state.f.win); $('#fConf').value = 0; $('#fConfVal').textContent = '0'; $('#fOnly').checked = true; renderAll();
+}
+function buildFilterOptions(){
+  const wins = META.window_options || [3, 6, 7, 10, 14, 20, 35];
+  $('#fWin').innerHTML = wins.map(w => '<option value="' + w + '"' + (w === 10 ? ' selected' : '') + '>' + w + ' candles' + (w === 7 ? ' (about 1 day)' : w === 35 ? ' (5 days)' : '') + '</option>').join('');
+  const groups = {}, names = {};
+  LIVE.forEach(s => (s.signals || []).forEach(g => { groups[g.group] = 1; (names[g.group] = names[g.group] || {})[g.name] = 1; }));
+  const order = ['1-candle','2-candle','3-candle','extended','squeeze','volume','trend','structure','range'];
+  const gl = order.filter(g => groups[g]).concat(Object.keys(groups).filter(g => !order.includes(g)));
+  $('#fGroup').innerHTML = '<option value="">All groups</option>' + gl.map(g => '<option>' + esc(g) + '</option>').join('');
+  $('#fPat').innerHTML = '<option value="">All signals</option>' + gl.map(g => '<optgroup label="' + esc(g) + '">' + Object.keys(names[g]).sort().map(n => '<option>' + esc(n) + '</option>').join('') + '</optgroup>').join('');
+}
+
+async function init(){
+  bindTheme($('#themeBtn'));
+  bind('#fSearch','q'); bind('#fType','type'); bind('#fSmc','smc'); bind('#fDir','dir'); bind('#fGroup','group'); bind('#fPat','pat');
+  bind('#fWin','win',true); bind('#fConf','conf',true); bind('#fStatus','status');
+  $('#fOnly').addEventListener('change', e => { state.f.only = e.target.checked; state.page = 1; renderAll(); });
+  $('#fReset').addEventListener('click', resetFilters);
+  $('#prev').addEventListener('click', () => { state.page--; renderScanner(); });
+  $('#next').addEventListener('click', () => { state.page++; renderScanner(); });
+  try { DATA = await loadData(); }
+  catch (e) {
+    const b = $('#errBanner'); b.textContent = 'Could not load shared-data/stocks.json (' + e.message + '). If you opened this file straight from your computer, serve the folder instead, for example: python -m http.server';
+    b.classList.remove('hidden'); $('#refreshIST').textContent = 'unavailable'; return;
+  }
+  META = DATA.meta || {}; LIVE = DATA.stocks.filter(isLive);
+  buildFilterOptions(); renderHeader(); renderStats(); renderBoards(); renderIssues(); renderAll();
+  const sym = new URLSearchParams(location.search).get('symbol');
+  if (sym) { state.f.q = sym; $('#fSearch').value = sym; state.f.only = false; $('#fOnly').checked = false; state.open = sym.toUpperCase(); renderAll(); }
+}
+init();
+</script>
+</body>
+</html>

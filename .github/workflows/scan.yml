@@ -1,0 +1,67 @@
+name: Scan market
+
+on:
+  schedule:
+    # GitHub cron is always UTC. Both times are safe in US summer AND winter time.
+    - cron: "30 17 * * 1-5"   # 23:00 IST - mid-session look (US market is open; the forming candle is excluded)
+    - cron: "2 0 * * *"       # 05:32 IST - final run after the close (full day's candles)
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Optional: symbols to ADD to symbols.csv before scanning, e.g.  NVDA, PLTR, SPY"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+# One scan at a time. A second run waits instead of fighting over stocks.json.
+concurrency:
+  group: scan-market
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Add requested symbols (manual runs only)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.symbols != ''
+        continue-on-error: true            # a mistyped ticker must not cancel the whole scan
+        env:
+          SYMBOLS: ${{ github.event.inputs.symbols }}
+        run: python add_stock.py --bulk "$SYMBOLS"
+
+      - name: Scan
+        run: python scan.py
+
+      - name: Validate output (nothing broken is ever published)
+        run: python validate_data.py
+
+      - name: Commit results
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add shared-data/stocks.json shared-data/symbols.csv
+          if git diff --cached --quiet; then
+            echo "Nothing changed - nothing to commit."
+            exit 0
+          fi
+          git commit -m "scan: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          for attempt in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "push attempt $attempt failed, retrying..."
+            sleep 5
+          done
+          echo "Could not push after 3 attempts"
+          exit 1
