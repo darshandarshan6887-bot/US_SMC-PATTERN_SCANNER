@@ -13,16 +13,22 @@ async function loadData(){
   if (!r.ok) throw new Error('stocks.json returned HTTP ' + r.status);
   const d = await r.json();
   if (!d || !Array.isArray(d.stocks) || !d.meta) throw new Error('stocks.json has an unexpected shape');
+  setRef(d.meta.latest_candle);
   return d;
 }
 function safeUrl(u){ return typeof u === 'string' && /^https:\/\/www\.tradingview\.com\//.test(u) ? u : '#'; }
 function dirLabel(d){ return d === 'bull' ? 'Bullish' : d === 'bear' ? 'Bearish' : 'Neutral'; }
 function money(v){ return v == null ? '–' : Number(v).toFixed(v >= 1 ? 2 : 4); }
-function fmtTime(t){            // "2026-10-02 14:30" (exchange-local candle start) -> "Fri 2:30 PM"
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let REF_DAY = null;            // the day of the latest candle; older times are shown with their date
+function setRef(t){ const m = /^(\d{4})-(\d\d)-(\d\d)/.exec(t || ''); if (m) REF_DAY = Date.UTC(+m[1], +m[2]-1, +m[3]); }
+function fmtTime(t){            // "2026-10-02 14:30" (exchange-local candle start) -> "Fri 2:30 PM", or "18 Sep, 12:30 PM" if older than 5 days
   if (!t) return '–';
   const m = /^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d)$/.exec(t); if (!m) return t;
-  const d = new Date(Date.UTC(+m[1], +m[2]-1, +m[3])); let h = +m[4]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
-  return DAYS[d.getUTCDay()] + ' ' + h + ':' + m[5] + ' ' + ap;
+  const day = Date.UTC(+m[1], +m[2]-1, +m[3]), d = new Date(day); let h = +m[4]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+  const clock = h + ':' + m[5] + ' ' + ap;
+  if (REF_DAY != null && (REF_DAY - day) / 864e5 >= 6) return (+m[3]) + ' ' + MONTHS[+m[2]-1] + (REF_DAY - day > 300 * 864e5 ? ' ' + m[1] : '') + ', ' + clock;
+  return DAYS[d.getUTCDay()] + ' ' + clock;
 }
 function tzShort(tz){ return tz === 'America/New_York' ? 'ET' : (tz || '').split('/').pop().replace('_',' '); }
 function agoText(n){ return n === 0 ? 'latest candle' : n + ' candle' + (n === 1 ? '' : 's') + ' ago'; }

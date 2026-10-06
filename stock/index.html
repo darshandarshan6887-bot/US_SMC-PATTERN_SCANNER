@@ -91,12 +91,16 @@ async function init(){
     '<div class="stat bear"><b>' + ((s.scores || {}).bear || 0) + '</b><span>best bearish score</span></div>' +
     '<div class="stat"><b>' + sigs.length + '</b><span>signals in last ' + (meta.store_bars || 35) + ' candles</span></div>';
   $('#chart').innerHTML = chart(s);
+  const sigName = v => ({STRONG_HIGH:'Strong High', WEAK_HIGH:'Weak High', STRONG_LOW:'Strong Low', WEAK_LOW:'Weak Low'})[v] || 'none';
+  const lvl = (sig, price, time, since) => sig && sig !== 'NO_SIGNAL' ? '<b>' + sigName(sig) + '</b> at $' + money(price) + (since != null && since >= 0 ? ', set ' + agoText(since) : '') + (time ? ' (' + esc(fmtTime(time)) + ')' : '') : 'none';
   $('#smc').innerHTML = kv([
-    ['Trend', esc(m.trend || 'UNKNOWN')], ['Last structure event', esc(m.structure_event || 'none') + (m.structure_bars_since >= 0 ? ', ' + m.structure_bars_since + ' candles ago' : '')],
-    ['Top signal', esc((m.top_signal || 'NO_SIGNAL').replace('_', ' ').toLowerCase()) + (m.top_signal_time ? ' (' + esc(m.top_signal_time) + ')' : '')],
-    ['Bottom signal', esc((m.bottom_signal || 'NO_SIGNAL').replace('_', ' ').toLowerCase()) + (m.bottom_signal_time ? ' (' + esc(m.bottom_signal_time) + ')' : '')],
-    ['Active swing high', money(m.active_swing_high)], ['Active swing low', money(m.active_swing_low)],
-    ['SMC rank (bull / bear)', (m.bullish_rank_score ?? '–') + ' / ' + (m.bearish_rank_score ?? '–')]]);
+    ['Trend', '<span class="pill ' + (m.trend === 'BULLISH' ? 'bull' : m.trend === 'BEARISH' ? 'bear' : 'none') + '">' + esc(m.trend || 'UNKNOWN') + '</span>'],
+    ['Last structure event', esc(m.structure_event === 'CHOCH' ? 'CHoCH' : (m.structure_event || 'none')) + (m.structure_bars_since >= 0 ? ', ' + agoText(m.structure_bars_since) : '') + (m.last_structure_time ? ' (' + esc(fmtTime(m.last_structure_time)) + ')' : '')],
+    ['High signal (downward)', lvl(m.top_signal, m.top_signal_price, m.top_signal_time, m.top_bars_since)],
+    ['High rank score', m.bearish_rank_score != null ? Number(m.bearish_rank_score).toFixed(1) : '–'],
+    ['Low signal (upward)', lvl(m.bottom_signal, m.bottom_signal_price, m.bottom_signal_time, m.bottom_bars_since)],
+    ['Low rank score', m.bullish_rank_score != null ? Number(m.bullish_rank_score).toFixed(1) : '–'],
+    ['Active swing high', money(m.active_swing_high)], ['Active swing low', money(m.active_swing_low)]]);
   $('#ctx').innerHTML = kv([
     ['Squeeze', esc(c.squeeze_state || '–')], ['Bollinger squeeze', c.bb_squeeze ? yn(c.bb_squeeze.on) + (c.bb_squeeze.on ? ' (' + c.bb_squeeze.bars + ' candles)' : '') : '–'],
     ['TTM squeeze', c.ttm_squeeze ? yn(c.ttm_squeeze.on) + (c.ttm_squeeze.momentum_dir ? ', momentum ' + esc(c.ttm_squeeze.momentum_dir) : '') : '–'],

@@ -27,7 +27,7 @@ body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text);
 button, input, select { font: inherit; color: inherit; }
 a { color: var(--focus); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-.wrap { max-width: 1360px; margin: 0 auto; padding: 0 20px 48px; }
+.wrap { max-width: 1760px; margin: 0 auto; padding: 0 20px 48px; }
 .banner { background: var(--banner); color: var(--banner-text); padding: 8px 20px; font-size: 13px; text-align: center; }
 .banner.err { background: var(--bear-soft); color: var(--bear); }
 header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; padding: 24px 0 14px; }
@@ -128,3 +128,36 @@ details.issues table { min-width: 0; } details.issues th { background: transpare
   .feed li { grid-template-columns: 70px 1fr auto; } .feed li .when { display: none; } .wrap { padding: 0 12px 40px; }
 }
 @media (prefers-reduced-motion: no-preference) { .conf .bar i { transition: width .25s ease; } }
+
+.symlink { color: inherit; text-decoration: none; }
+.symlink:hover b { text-decoration: underline; color: var(--focus); }
+tbody tr.row td { cursor: pointer; }
+
+/* ---- SMC signal pills and paired tables ---- */
+.pill.sh { background: var(--bear-soft); color: var(--bear); font-weight: 600; }
+.pill.wh { background: transparent; color: var(--bear); box-shadow: inset 0 0 0 1px var(--bear); }
+.pill.sl { background: var(--bull-soft); color: var(--bull); font-weight: 600; }
+.pill.wl { background: transparent; color: var(--bull); box-shadow: inset 0 0 0 1px var(--bull); }
+.sec { margin: 22px 0 10px; }
+.sec h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.sec p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(540px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.tcard { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0; overflow: hidden; }
+.tcard .head { padding: 12px 14px 8px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.tcard .head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.tcard .head h3.bull { color: var(--bull); } .tcard .head h3.bear { color: var(--bear); }
+.tcard .head p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); flex-basis: 100%; }
+.tcard .head .cnt { font-size: 12.5px; color: var(--muted); }
+.tcard table { min-width: 0; }
+.tcard th, .tcard td { padding: 7px 8px; white-space: nowrap; }
+.tcard .patcell b { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.tcard .scroll.tall { max-height: 520px; overflow: auto; }
+.tcard .scroll.tall th { position: sticky; top: 0; z-index: 1; }
+.tcard .pager { padding: 8px 12px; border-top: 1px solid var(--line); }
+td.idx { color: var(--muted); width: 34px; }
+@media (max-width: 700px) { .pair { grid-template-columns: 1fr; } }
+.tcard .conf { min-width: 96px; }
+.tcard .conf .bar { min-width: 40px; }
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { white-space: nowrap; }
