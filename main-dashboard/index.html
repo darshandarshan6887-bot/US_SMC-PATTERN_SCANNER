@@ -173,10 +173,13 @@ const REV = {
          'Evening Star','Bearish Abandoned Baby','Three Black Crows','Three Inside Down','Three Outside Down','Bearish Tri-Star','Turtle Soup']
 };
 const COMBO_ATR = 1;           // the pattern's extreme must be within this many ATR of the SMC level
+const COMBO_TREND = 1;         // price must have travelled into the level: the 8 closes before the pattern average at least this many ATR beyond it
+const COMBO_RUN = 2;           // drop the setup once price has already run this many ATR away from the pattern (the turn is over, not coming)
+const COMBO_TOP_WIN = 10;      // the Top 20 boards only look at patterns formed in the last 10 candles
 /* side 'low': Strong/Weak Low + bullish pattern. side 'high': Strong/Weak High + bearish pattern. */
 function comboRows(side, filtered){
   const low = side === 'low', key = low ? 'bottom' : 'top', dir = low ? 'bull' : 'bear', f = state.f;
-  const win = filtered ? f.win : (META.top_board_window || 20), out = [];
+  const win = filtered ? f.win : COMBO_TOP_WIN, out = [];
   (filtered ? LIVE.filter(symbolOk) : LIVE).forEach(s => {
     const m = s.smc || {}, sig = m[key + '_signal'], level = m[key + '_signal_price'], lvSince = m[key + '_bars_since'];
     const atr = (s.context || {}).atr, cs = s.candles || [], n = cs.length;
@@ -192,6 +195,11 @@ function comboRows(side, filtered){
       for (let i = a; i <= end; i++) { lo = Math.min(lo, cs[i][3]); hi = Math.max(hi, cs[i][2]); }
       const ext = low ? lo : hi, gap = ext - level;
       if (Math.abs(gap) > COMBO_ATR * atr) return;                                  // not at the level
+      const pre = cs.slice(Math.max(0, a - 8), a);                                   // the candles before the pattern
+      if (pre.length < 4) return;
+      const avg = pre.reduce((t, c) => t + c[4], 0) / pre.length;
+      if (!((low ? avg - ext : ext - avg) >= COMBO_TREND * atr)) return;            // no real move into the level, so nothing to reverse
+      if ((low ? s.price - ext : ext - s.price) > COMBO_RUN * atr) return;          // already ran away, too late
       let status = g.confirm || 'pending', failed = false;
       for (let i = end + 1; i < n; i++) {
         if (low ? cs[i][3] < ext : cs[i][2] > ext) { failed = true; break; }       // new low (high) after the pattern: setup is dead
@@ -243,8 +251,8 @@ const TABLE_DEFS = {
   smcHigh: {title:'High signals (downward)', cls:'bear', sub:'Strong / Weak High. Ranked by bearish rank score: a Strong High (bearish trend) set very recently ranks highest.', cols: () => smcCols('high'), rows: f => smcRows('high', f)},
   smcLow:  {title:'Low signals (upward)', cls:'bull', sub:'Strong / Weak Low. Ranked by bullish rank score: a Strong Low (bullish trend) set very recently ranks highest.', cols: () => smcCols('low'), rows: f => smcRows('low', f)},
   patBull: {title:'Bullish pattern signals', cls:'bull', sub:'Highest confluence score first. Candlestick, squeeze, volume, trend and structure signals.', cols: () => patCols('bull'), rows: f => patRows('bull', f)},
-  comboLow: {title:'Bottom setups (upward)', cls:'bull', tie:(a, b) => b.score - a.score, sub:'Strong / Weak Low with a bullish reversal pattern (3 stars or more, Turtle Soup, Undercut & Rally) formed at the low, within 1 ATR, and no new low since. Ranked by bullish SMC rank, ties by pattern score.', cols: () => comboCols('low'), rows: f => comboRows('low', f)},
-  comboHigh: {title:'Top setups (downward)', cls:'bear', tie:(a, b) => b.score - a.score, sub:'Strong / Weak High with a bearish reversal pattern (3 stars or more, Turtle Soup) formed at the high, within 1 ATR, and no new high since. Ranked by bearish SMC rank, ties by pattern score.', cols: () => comboCols('high'), rows: f => comboRows('high', f)},
+  comboLow: {title:'Bottom setups (upward)', cls:'bull', tie:(a, b) => b.score - a.score, sub:'Strong / Weak Low with a bullish reversal pattern (3 stars or more, Turtle Soup, Undercut & Rally) formed at the low (within 1 ATR) after a real decline into it, no new low since, and price not already more than 2 ATR away. Ranked by bullish SMC rank, ties by pattern score.', cols: () => comboCols('low'), rows: f => comboRows('low', f)},
+  comboHigh: {title:'Top setups (downward)', cls:'bear', tie:(a, b) => b.score - a.score, sub:'Strong / Weak High with a bearish reversal pattern (3 stars or more, Turtle Soup) formed at the high (within 1 ATR) after a real rise into it, no new high since, and price not already more than 2 ATR away. Ranked by bearish SMC rank, ties by pattern score.', cols: () => comboCols('high'), rows: f => comboRows('high', f)},
   patBear: {title:'Bearish pattern signals', cls:'bear', sub:'Highest confluence score first. Candlestick, squeeze, volume, trend and structure signals.', cols: () => patCols('bear'), rows: f => patRows('bear', f)}
 };
 function tableShell(id, d, top){
