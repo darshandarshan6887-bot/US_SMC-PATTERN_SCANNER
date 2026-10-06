@@ -28,18 +28,17 @@
 
 <section class="stats" id="stats" aria-label="Scan summary"></section>
 
-<div class="sec"><h2>Top 20 right now</h2><p>Always the whole list, not affected by the filters below. Click any row to open that stock's page.</p></div>
+<div class="sec"><h2>Top 20 right now</h2><p>Order: SMC level + reversal pattern first, then SMC signals, then pattern signals. Always the whole list, not affected by the filters below (the first pair only looks at patterns from the last 10 candles and may be short or empty). Click any row to open that stock's page.</p></div>
+<section class="pair" id="topCombo"></section>
 <section class="pair" id="topSmc"></section>
 <section class="pair" id="topPat"></section>
-<div class="sec"><h2>SMC level + reversal pattern</h2><p>A Strong or Weak Low (or High) with a strong reversal pattern formed right at it. Ranked by the SMC rank score, ties by pattern confluence.</p></div>
-<section class="pair" id="topCombo"></section>
 
 <div class="sec"><h2>Full lists</h2><p>Every scanned symbol, arranged the same way. The filters apply here.</p></div>
 
 <div class="tabs" role="tablist">
-  <button class="tab" role="tab" aria-selected="true" data-tab="smc">SMC signals</button>
+  <button class="tab" role="tab" aria-selected="true" data-tab="combo">SMC + pattern</button>
+  <button class="tab" role="tab" aria-selected="false" data-tab="smc">SMC signals</button>
   <button class="tab" role="tab" aria-selected="false" data-tab="pat">Pattern signals</button>
-  <button class="tab" role="tab" aria-selected="false" data-tab="combo">SMC + pattern</button>
   <button class="tab" role="tab" aria-selected="false" data-tab="all">All symbols</button>
   <button class="tab" role="tab" aria-selected="false" data-tab="feed">Signal feed<span class="count" id="feedCount"></span></button>
   <button class="tab" role="tab" aria-selected="false" data-tab="watch">Watchlist<span class="count" id="watchCount"></span></button>
@@ -62,10 +61,9 @@
   <div class="actions"><button class="btn" id="fReset" type="button">Reset filters</button></div>
 </section>
 
-<div id="viewSmc"><section class="pair" id="fullSmc"></section></div>
+<div id="viewCombo"><section class="pair" id="fullCombo"></section></div>
+<div id="viewSmc" class="hidden"><section class="pair" id="fullSmc"></section></div>
 <div id="viewPat" class="hidden"><section class="pair" id="fullPat"></section></div>
-
-<div id="viewCombo" class="hidden"><section class="pair" id="fullCombo"></section></div>
 
 <div id="viewAll" class="hidden">
   <section class="card">
@@ -97,7 +95,7 @@ let watch = getWatch();
 const $ = (s, r=document) => r.querySelector(s);
 const stockUrl = sym => '../stock/index.html?symbol=' + encodeURIComponent(sym);
 const DEFAULT_F = {q:'', type:'', smc:'', strength:'', event:'', age:'', group:'', pat:'', win:10, conf:0, status:'', only:false, pending:false};
-const state = { tab: 'smc', f: {...DEFAULT_F}, all: {key: 'conf', dir: -1, page: 1, per: 25},
+const state = { tab: 'combo', f: {...DEFAULT_F}, all: {key: 'conf', dir: -1, page: 1, per: 25},
   t: { smcHigh: {key:'rank', dir:-1, page:1}, smcLow: {key:'rank', dir:-1, page:1}, patBull: {key:'score', dir:-1, page:1}, patBear: {key:'score', dir:-1, page:1},
     comboLow: {key:'rank', dir:-1, page:1}, comboHigh: {key:'rank', dir:-1, page:1} } };
 const PER = 20;
@@ -360,7 +358,7 @@ function renderWatch(){
   $('#tbodyW').innerHTML = allRowsHtml(sortAll(have.map(view)));
   $('#emptyWatch').classList.toggle('hidden', have.length > 0); $('#tblWatch').classList.toggle('hidden', have.length === 0);
 }
-function renderFull(){ ['smcHigh','smcLow'].forEach(id => renderTable('f_', id, false)); ['patBull','patBear'].forEach(id => renderTable('f_', id, false)); ['comboLow','comboHigh'].forEach(id => renderTable('f_', id, false)); renderAllTab(); renderFeed(); renderWatch(); }
+function renderFull(){ ['comboLow','comboHigh','smcHigh','smcLow','patBull','patBear'].forEach(id => renderTable('f_', id, false)); renderAllTab(); renderFeed(); renderWatch(); }
 
 /* ---------- header, stats, issues ---------- */
 function renderHeader(){
@@ -448,8 +446,8 @@ async function init(){
   bindTheme($('#themeBtn'));
   $('#topSmc').innerHTML = tableShell('t_smcHigh', TABLE_DEFS.smcHigh, true) + tableShell('t_smcLow', TABLE_DEFS.smcLow, true);
   $('#topPat').innerHTML = tableShell('t_patBull', TABLE_DEFS.patBull, true) + tableShell('t_patBear', TABLE_DEFS.patBear, true);
-  $('#topCombo').innerHTML = tableShell('t_comboLow', TABLE_DEFS.comboLow, true) + tableShell('t_comboHigh', TABLE_DEFS.comboHigh, true);
-  $('#fullCombo').innerHTML = tableShell('f_comboLow', TABLE_DEFS.comboLow, false) + tableShell('f_comboHigh', TABLE_DEFS.comboHigh, false);
+  $('#topCombo').innerHTML = tableShell('t_comboHigh', TABLE_DEFS.comboHigh, true) + tableShell('t_comboLow', TABLE_DEFS.comboLow, true);
+  $('#fullCombo').innerHTML = tableShell('f_comboHigh', TABLE_DEFS.comboHigh, false) + tableShell('f_comboLow', TABLE_DEFS.comboLow, false);
   $('#fullSmc').innerHTML = tableShell('f_smcHigh', TABLE_DEFS.smcHigh, false) + tableShell('f_smcLow', TABLE_DEFS.smcLow, false);
   $('#fullPat').innerHTML = tableShell('f_patBull', TABLE_DEFS.patBull, false) + tableShell('f_patBear', TABLE_DEFS.patBear, false);
   bindFilters();
@@ -460,7 +458,7 @@ async function init(){
   }
   META = DATA.meta || {}; LIVE = DATA.stocks.filter(isLive);
   buildFilterOptions(); renderHeader(); renderStats(); renderIssues();
-  ['smcHigh','smcLow','patBull','patBear','comboLow','comboHigh'].forEach(id => renderTable('t_', id, true));
+  ['comboLow','comboHigh','smcHigh','smcLow','patBull','patBear'].forEach(id => renderTable('t_', id, true));
   renderFull();
 }
 init();
