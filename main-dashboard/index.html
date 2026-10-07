@@ -30,8 +30,6 @@
 
 <div class="sec"><h2>Top 20 right now</h2></div>
 <section class="pair one" id="topCombo"></section>
-<section class="pair" id="topSmc"></section>
-<section class="pair" id="topPat"></section>
 
 <div class="sec"><h2>Full lists</h2></div>
 
@@ -442,8 +440,6 @@ function buildFilterOptions(){
 
 async function init(){
   bindTheme($('#themeBtn'));
-  $('#topSmc').innerHTML = tableShell('t_smcHigh', TABLE_DEFS.smcHigh, true) + tableShell('t_smcLow', TABLE_DEFS.smcLow, true);
-  $('#topPat').innerHTML = tableShell('t_patBull', TABLE_DEFS.patBull, true) + tableShell('t_patBear', TABLE_DEFS.patBear, true);
   $('#topCombo').innerHTML = tableShell('t_comboHigh', TABLE_DEFS.comboHigh, true) + tableShell('t_comboLow', TABLE_DEFS.comboLow, true);
   $('#fullCombo').innerHTML = tableShell('f_comboHigh', TABLE_DEFS.comboHigh, false) + tableShell('f_comboLow', TABLE_DEFS.comboLow, false);
   $('#fullSmc').innerHTML = tableShell('f_smcHigh', TABLE_DEFS.smcHigh, false) + tableShell('f_smcLow', TABLE_DEFS.smcLow, false);
@@ -456,7 +452,7 @@ async function init(){
   }
   META = DATA.meta || {}; LIVE = DATA.stocks.filter(isLive);
   buildFilterOptions(); renderHeader(); renderStats(); renderIssues();
-  ['comboLow','comboHigh','smcHigh','smcLow','patBull','patBear'].forEach(id => renderTable('t_', id, true));
+  ['comboLow','comboHigh'].forEach(id => renderTable('t_', id, true));
   renderFull();
 }
 init();
