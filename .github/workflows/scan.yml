@@ -2,9 +2,10 @@ name: Scan market
 
 on:
   schedule:
-    # GitHub cron is always UTC. Both times are safe in US summer AND winter time.
-    - cron: "30 17 * * 1-5"   # 23:00 IST - mid-session look (US market is open; the forming candle is excluded)
-    - cron: "2 0 * * *"       # 05:32 IST - final run after the close (full day's candles)
+    # GitHub cron is always UTC. Runs every hour, 24 times a day, every day (weekends and holidays too).
+    # US one-hour candles close at :30 UTC, so minute 35 starts each run about 5 minutes after a candle closes.
+    # (35 past the hour UTC = 5 past the hour IST, e.g. 13:35 UTC = 19:05 IST.) Not minute 0: GitHub is busiest there.
+    - cron: "35 * * * *"
   workflow_dispatch:
     inputs:
       symbols:
