@@ -233,6 +233,21 @@ class TestScanRun(Env):
         self.assertEqual(self.run_scan(), 2)
 
 
+class TestYahooRangeLimit(unittest.TestCase):
+    def test_lookback_stays_inside_yahoos_730_day_limit_for_every_time_zone(self):
+        # start = local-midnight DATE of (now - lookback) in New York; the same date at midnight in UTC+14 is 14h earlier
+        worst_case_days = config.HOURLY_LOOKBACK_DAYS + 1 + 14 / 24
+        self.assertLess(worst_case_days, 730)
+
+    def test_the_requested_start_is_a_plain_date(self):
+        seen = {}
+        def fake(ticker, interval, start):
+            seen["start"] = start
+            return yf_like(random_walk(300, seed=1))
+        market_data.fetch_history("X", history_fn=fake, now_utc=AFTER_CLOSE)
+        self.assertRegex(seen["start"], r"^\d{4}-\d\d-\d\d$")
+
+
 class TestClosedCandleRule(Env):
     def test_forming_candle_is_dropped_mid_session(self):
         df = random_walk(900, seed=1, vol=0.008, last="2026-10-02 13:30")           # last candle STARTS 13:30

@@ -161,3 +161,8 @@ td.idx { color: var(--muted); width: 34px; }
 .tabs { overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { white-space: nowrap; }
+.pair.one { grid-template-columns: 1fr; }
+
+/* pattern tables carry a Status column: tighten a little so both tables still fit side by side on a wide screen */
+.tcard .conf { min-width: 78px; }
+.tcard th, .tcard td { padding-left: 6px; padding-right: 6px; }

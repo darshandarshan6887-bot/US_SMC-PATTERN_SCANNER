@@ -119,3 +119,15 @@ The score ranks setups against each other. It is **not** a probability of succes
 
 ## Confirmation (candlestick patterns)
 The Handbook's golden rule is to wait for a later candle to close beyond the pattern. Each directional candlestick signal is marked **pending** (no later candle has decided it), **confirmed** (a later close beyond the pattern's high for bullish, low for bearish) or **failed** (a later close beyond the stop reference first).
+
+## Confirmation in the pattern tables
+
+The Bullish and Bearish pattern tables use the same confirmation rule as the SMC + pattern tables: a candle pattern only counts once a **later candle has closed beyond it** (the Candlestick Handbook's rule). Failed patterns are never shown.
+
+| Status | Meaning |
+|---|---|
+| Confirmed | A later candle closed beyond the pattern. |
+| Pending | The pattern formed but no later candle has closed beyond it yet (always the case on the latest candle). |
+| Trigger | Squeeze, volume, trend and structure events. The close beyond a level is the signal itself, so there is nothing left to confirm. |
+
+Turtle Soup and Undercut & Rally are decided from the saved candles: a later close beyond the signal candle's extreme confirms them, a close the other way kills them, whichever comes first. The **Pattern confirmation** filter switches between *Confirmed only* (default, and what the Top 20 boards always use), *Pending only* and *Confirmed and pending*.

@@ -13,7 +13,8 @@ PIPELINE_LOCK = DATA_DIR / ".pipeline.lock"
 
 # ---- Market data -------------------------------------------------------------
 INTERVAL = "1h"
-HOURLY_LOOKBACK_DAYS = 729        # Yahoo serves at most ~730 days of 1h data
+HOURLY_LOOKBACK_DAYS = 700        # Yahoo refuses ranges over 730 days. The start is a local-midnight date, which for Asian
+                                  # exchanges lies up to ~1.6 days earlier than for New York, so 729 failed for every KS/HK/SZ ticker.
 DATE_FMT = "%Y-%m-%d %H:%M"       # candle START time, in the exchange's own local time
 CALC_BARS = 700                   # bars fed to the pattern/indicator engine (SMC uses everything)
 REGULAR_HOURS_ONLY = True         # yfinance's default (prepost=False). Do not change without reading the README.

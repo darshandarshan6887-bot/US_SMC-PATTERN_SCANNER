@@ -71,3 +71,25 @@ function bindTheme(btn){
 /* watchlist lives in this browser only */
 function getWatch(){ try { const a = JSON.parse(store.get('scanner-watch') || '[]'); return Array.isArray(a) ? a : []; } catch(e){ return []; } }
 function setWatch(a){ store.set('scanner-watch', JSON.stringify(a)); }
+
+/* ---------- confirmation rule for the pattern tables ----------
+   Same rule as the SMC + pattern tables (Candlestick Handbook): a candle pattern only counts once a LATER candle has closed
+   beyond it. Returns 'confirmed', 'pending', 'failed' or 'trigger'.
+   - candlestick patterns: the scanner already decided (g.confirm)
+   - Turtle Soup / Undercut & Rally: decided here from the saved candles. Bullish: a later close above the signal candle's
+     high confirms it, a later close below its low kills it (bearish is the mirror image). Whichever comes first wins.
+   - squeeze / volume / trend / structure events: the close beyond a level IS the trigger, so there is nothing left to confirm */
+function patStatus(s, g){
+  if (g.confirm) return g.confirm;
+  if (g.name === 'Turtle Soup' || g.name === 'Undercut & Rally') {
+    const cs = s.candles || [], n = cs.length, end = n - 1 - g.since;
+    if (end < 0 || end >= n) return 'pending';
+    const bull = g.dir === 'bull';
+    for (let i = end + 1; i < n; i++) {
+      if (bull ? cs[i][4] > cs[end][2] : cs[i][4] < cs[end][3]) return 'confirmed';
+      if (bull ? cs[i][4] < cs[end][3] : cs[i][4] > cs[end][2]) return 'failed';
+    }
+    return 'pending';
+  }
+  return 'trigger';
+}
