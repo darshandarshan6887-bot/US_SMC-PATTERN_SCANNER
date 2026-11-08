@@ -210,13 +210,13 @@ function comboRows(side, filtered){
       }
       if (failed) return;
       if (status !== 'confirmed') return;                                           // only turns that have already started: a later candle closed beyond the pattern
-      cands.push({g, status, confTime: confIdx >= 0 ? cs[confIdx][0] : null, confSince: confIdx >= 0 ? n - 1 - confIdx : null, stop: g.stop != null ? g.stop : ext, dist: Math.abs(gap) / atr, above: low ? gap >= 0 : gap <= 0});
+      cands.push({g, status, confTime: confIdx >= 0 ? cs[confIdx][0] : null, confPrice: confIdx >= 0 ? cs[confIdx][4] : null, confSince: confIdx >= 0 ? n - 1 - confIdx : null, stop: g.stop != null ? g.stop : ext, dist: Math.abs(gap) / atr, above: low ? gap >= 0 : gap <= 0});
     });
     if (!cands.length) return;
     cands.sort((x, y) => y.g.score - x.g.score || x.g.since - y.g.since);
     const c = cands[0];
     out.push({s, sig, level, time: m[key + '_signal_time'], since: lvSince, rank: low ? m.bullish_rank_score : m.bearish_rank_score,
-      best: c.g, n: cands.length, status: c.status, confTime: c.confTime, confSince: c.confSince, stop: c.stop, dist: c.dist, above: c.above, score: c.g.score});
+      best: c.g, n: cands.length, status: c.status, confTime: c.confTime, confPrice: c.confPrice, confSince: c.confSince, stop: c.stop, dist: c.dist, above: c.above, score: c.g.score});
   });
   return out;
 }
@@ -243,7 +243,7 @@ const comboCols = side => { const low = side === 'low', dir = low ? 'bull' : 'be
   {k:'sig', t: low ? 'Low signal' : 'High signal', get: r => r.sig, cell: r => sigPill(r.sig)},
   {k:'level', t: low ? 'Low level' : 'High level', num:true, get: r => r.level, cell: r => '$' + money(r.level) + '<br><span class="muted small">' + (r.since != null && r.since >= 0 ? 'set ' + agoText(r.since) : '–') + '</span>'},
   {k:'pat', t:'Pattern', get: r => r.best.name, cell: r => patCell(r.best, r.n - 1)},
-  {k:'status', t:'Status', get: r => r.status, cell: r => r.status === 'confirmed' ? '<span class="pill ' + dir + '">Confirmed</span>' + (r.confTime ? '<br><span class="muted small" title="The candle that closed beyond the pattern and confirmed it">' + esc(fmtTime(r.confTime)) + ', ' + agoText(r.confSince) + '</span>' : '') : '<span class="pill neutral" title="Pattern formed, no later candle has closed beyond it yet">Pending</span>'},
+  {k:'status', t:'Status', get: r => r.status, cell: r => r.status === 'confirmed' ? '<span class="pill ' + dir + '">Confirmed</span>' + (r.confTime ? '<br><span class="muted small" title="The candle that closed beyond the pattern and confirmed it">' + esc(fmtTime(r.confTime)) + ', ' + agoText(r.confSince) + '</span><br><span class="small" title="Closing price of the confirming candle">at $' + money(r.confPrice) + '</span>' : '') : '<span class="pill neutral" title="Pattern formed, no later candle has closed beyond it yet">Pending</span>'},
   {k:'stop', t:'Stop ref', num:true, get: r => r.stop, cell: r => '$' + money(r.stop)},
   {k:'dist', t:'From level', num:true, get: r => r.dist, cell: r => r.dist.toFixed(2) + ' ATR<br><span class="muted small">' + (r.dist < 0.05 ? 'right at the ' : (r.above ? 'beyond the ' : 'inside the ')) + (low ? 'low' : 'high') + '</span>'},
   {k:'rank', t:'SMC rank', num:true, get: r => r.rank ?? -1, cell: r => '<b style="color:var(--' + (low ? 'bull' : 'bear') + ')">' + (r.rank != null ? Number(r.rank).toFixed(1) : '–') + '</b>'},
