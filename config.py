@@ -17,7 +17,13 @@ HOURLY_LOOKBACK_DAYS = 700        # Yahoo refuses ranges over 730 days. The star
                                   # exchanges lies up to ~1.6 days earlier than for New York, so 729 failed for every KS/HK/SZ ticker.
 DATE_FMT = "%Y-%m-%d %H:%M"       # candle START time, in the exchange's own local time
 CALC_BARS = 700                   # bars fed to the pattern/indicator engine (SMC uses everything)
-REGULAR_HOURS_ONLY = True         # yfinance's default (prepost=False). Do not change without reading the README.
+# ONE SWITCH for extended hours (EXPERIMENT).  False = regular session only (the original, tuned behaviour).
+# True = also pre-market and after-hours candles from Yahoo (about 4:00 AM - 8:00 PM New York time, ~16 candles a day).
+# Yahoo has no overnight (8 PM - 4 AM ET) candles, so this is NOT a full 24-hour feed. Every candle-count setting below
+# scales automatically with BARS_PER_DAY, so flipping this back to False restores the original numbers exactly.
+EXTENDED_HOURS = False
+REGULAR_HOURS_ONLY = not EXTENDED_HOURS      # passed to yfinance as prepost=not REGULAR_HOURS_ONLY
+BARS_PER_DAY = 16 if EXTENDED_HOURS else 7   # 1H candles per day per symbol
 
 # ---- Market-structure (SMC) engine - unchanged from your original project -----
 SWING_LEN = 50                    # LuxAlgo "swings length"
@@ -29,16 +35,16 @@ MARKET_OPEN = (9, 30)
 MARKET_CLOSE = (16, 0)
 
 # ---- Signals -------------------------------------------------------------------
-STORE_BARS = 35                   # keep every signal that formed within the last N candles (5 trading days)
+STORE_BARS = 5 * BARS_PER_DAY     # keep every signal that formed within the last N candles (5 trading days) = 35 regular / 80 extended
 FRESH_FADE_BARS = 20              # freshness score falls from full marks to 0 over this many candles
-RANGE_KEEP_BARS = 7               # Inside Bar / NR4 / NR7 are one-candle triggers: keep them only this long
+RANGE_KEEP_BARS = BARS_PER_DAY    # Inside Bar / NR4 / NR7 are one-candle triggers: keep them only this long (one day)
 MAX_SIGNALS = 60                  # hard cap per symbol (keeps stocks.json small)
-RECENT_CANDLES = 40               # candles saved per symbol for the dashboard's mini chart
-WINDOW_OPTIONS = [3, 6, 7, 10, 14, 20, 35]   # shown in the dashboard's "formed within last" filter
+RECENT_CANDLES = STORE_BARS + 5   # candles saved per symbol (mini chart + confirmation time/price): must cover STORE_BARS
+WINDOW_OPTIONS = [3, 6, 7, 10, 14, 20, 35] if not EXTENDED_HOURS else [3, 8, 16, 24, 32, 48, 80]   # dashboard "formed within last" filter
 TOP_BOARD_WINDOW = 20             # the Top bullish / Top bearish boards look at this many candles
 TOP_BOARD_SIZE = 20
 
-PCT_LOOKBACK = 441                # ~63 trading days of 1H bars: window for "lowest X% of recent history"
+PCT_LOOKBACK = 63 * 7 if not EXTENDED_HOURS else 28 * BARS_PER_DAY   # 441 candles regular (63 days) / 448 extended (28 days); must stay <= CALC_BARS
 SQUEEZE_PCT = 0.20                # compression = in the lowest 20% of its own recent history
 BB_LEN, BB_MULT = 20, 2.0
 KC_MULT = 1.5                     # Keltner channel width for the TTM squeeze
@@ -56,3 +62,6 @@ REQUEST_TIMEOUT = 20
 MAX_RETRIES = 3
 RETRY_BASE = float(os.environ.get("SCANNER_RETRY_BASE", 2.0))   # seconds; exponential backoff base
 STALE_WARN_FRACTION = 0.25        # validate step warns when more than this share of symbols is STALE/ERROR
+
+# ---- Support / resistance levels (levels.py, ported from the book "Auto Touch S/R v4") ----------------------------
+LEVELS_ON = True                  # False = skip the level finder entirely (stocks.json then has no "levels")

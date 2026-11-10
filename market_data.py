@@ -64,6 +64,9 @@ def bar_end(start: pd.Timestamp, tz_name: str) -> pd.Timestamp:
         close = start.normalize() + pd.Timedelta(hours=config.MARKET_CLOSE[0], minutes=config.MARKET_CLOSE[1])
         if start < close < end:
             end = close
+        opn = start.normalize() + pd.Timedelta(hours=config.MARKET_OPEN[0], minutes=config.MARKET_OPEN[1])
+        if start < opn < end:                              # extended hours: the 9:00 pre-market candle ends at the 9:30 open
+            end = opn
     return end
 
 

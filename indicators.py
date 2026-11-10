@@ -145,7 +145,7 @@ def hist_vol(c, n: int = 20) -> np.ndarray:
     """Annualised stdev of log returns (7 one-hour candles a day, 252 days)."""
     r = np.diff(np.log(c), prepend=np.nan)
     sd = pd.Series(r).rolling(n).std(ddof=1).to_numpy()
-    return sd * np.sqrt(7 * 252)
+    return sd * np.sqrt(config.BARS_PER_DAY * 252)
 
 
 def ichimoku(h, l, c):
