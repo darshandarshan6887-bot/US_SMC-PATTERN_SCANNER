@@ -1,6 +1,6 @@
 # Pattern Scanner
 
-Scans **only the symbols in `shared-data/symbols.csv`** (your CoinSwitch US-stock-futures list) on **closed 1-hour candles**, twice a day, and publishes a dashboard. Nothing to host, no server, no paid service.
+Scans **only the symbols in `shared-data/symbols.csv`** (your CoinSwitch US-stock-futures list) on **closed 1-hour candles**, every hour, and publishes a dashboard. Nothing to host, no server, no paid service.
 
 Each symbol gets
 * **SMC market structure** (BOS / CHoCH, strong and weak highs and lows) from your original engine,
@@ -30,12 +30,19 @@ You need a free GitHub account. Everything happens in the browser.
 
 ### What runs automatically
 
-| When | IST | What |
-|---|---|---|
-| Mon to Fri 17:30 UTC | 23:00 | **Mid-session look.** The candle still forming is excluded, so nothing flickers. |
-| Every day 00:02 UTC | 05:32 | **Final run** after the close, with the whole day's candles. Overwrites the mid-session result. |
+| When | What |
+|---|---|
+| Every hour at minute 35 UTC, every day | **Scan.** US one-hour candles close at :30 UTC, so each run starts about 5 minutes after one. The candle still forming is excluded, so nothing flickers. Weekends and holidays run too; they simply find no new candles. |
 
-Both times are inside or after the US session in summer and winter time. GitHub can start a scheduled run 10 to 60 minutes late. That is harmless.
+GitHub can start a scheduled run 10 to 60 minutes late. That is harmless.
+
+The website is published by the workflow itself: **Settings -> Pages -> Source must be "GitHub Actions"**. The `deploy` job in `scan.yml` publishes after every scan, and `pages.yml` publishes when you push changes yourself. (A push made by the scan bot cannot start other workflows, which is why the scan workflow publishes by itself.)
+
+The git history keeps only the newest 100 commits: the last step of `scan.yml` trims the older ones after each scan, so the repo stops growing. Files are not affected, only old versions of them.
+
+### Support / resistance levels
+
+`levels.py` finds support and resistance from swing points (a port of the "Auto Touch S/R v4" rules) and stores the strongest ones per symbol in `stocks.json`; they are listed on each stock page. Grades are calibrated against random prices: **A = better than about 95% of the levels that pure noise produces**. They are evidence, not a probability. To switch the levels off, set `LEVELS_ON = False` in `config.py`.
 
 ---
 
