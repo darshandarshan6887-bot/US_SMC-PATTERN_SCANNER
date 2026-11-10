@@ -25,6 +25,7 @@ from urllib.parse import quote
 import numpy as np
 
 import config
+import levels as levels_mod
 import market_data
 import signals
 import smc_engine as eng
@@ -106,6 +107,13 @@ def analyse_frame(row: sym.SymbolRow, fetch: market_data.Fetch, scanned_at: str)
     rec.update({"scanner_status": "OK", "price": round(price, 4),
                 "change_pct": None if change is None else round(change, 2),
                 "smc": smc, "signals": sigs, "context": ctx, "scores": scores, "candles": candles})
+    if getattr(config, "LEVELS_ON", False):                         # support / resistance levels (levels.py)
+        try:
+            lv = levels_mod.analyse(df)
+            rec["levels"], rec["levels_meta"] = lv["levels"], lv["meta"]
+        except Exception as e:                                      # noqa: BLE001 - a level bug must never lose the scan
+            log.warning(f"{row.symbol}: levels failed - {type(e).__name__}: {e}")
+            rec["levels"], rec["levels_meta"] = [], {"error": f"{type(e).__name__}: {e}"[:120]}
     return rec
 
 

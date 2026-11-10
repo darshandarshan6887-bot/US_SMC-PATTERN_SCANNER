@@ -27,6 +27,7 @@
     <section class="panel"><h2>Readings</h2><dl class="kv" id="ctx"></dl></section>
     <section class="panel"><h2>Why the top score</h2><div id="why"></div></section>
   </div>
+  <section class="card" id="lvlCard"><div style="padding:14px 16px 4px"><b>Support &amp; resistance levels</b> <span class="muted small" id="lvlMeta"></span></div><div class="scroll"><table class="sig-table" style="min-width:760px"><thead><tr><th>Role</th><th class="num">Level</th><th>Grade</th><th class="num">Score</th><th class="num">Visits / candles</th><th class="num">Hold rate</th><th class="num">From price</th><th>Notes</th></tr></thead><tbody id="lvls"></tbody></table></div></section>
   <section class="card"><div style="padding:14px 16px 4px"><b>All signals, last <span id="storeBars">35</span> candles</b></div><div class="scroll"><table class="sig-table" style="min-width:760px"><thead><tr><th>Signal</th><th>Group</th><th>Direction</th><th>Formed (candle start)</th><th class="num">Ago</th><th class="num">Stop ref.</th><th>Confirmation</th><th class="num">Score</th></tr></thead><tbody id="sigs"></tbody></table></div></section>
   <p class="muted small" id="notes"></p>
 </div>
@@ -111,6 +112,15 @@ async function init(){
     ['Price vs Ichimoku cloud', esc(c.ichimoku_cloud || '–')], ['ATR', (c.atr ?? '–') + ' (' + (c.atr_pct ?? '–') + '% of price)']]);
   $('#why').innerHTML = top && top.parts ? '<p class="small" style="margin:0 0 6px"><b>' + esc(top.name) + '</b> · ' + dirLabel(top.dir) + ' · score ' + top.score + '</p>' +
     PART_LABELS.map(([k, label, max], i) => '<div class="break"><span>' + label + '</span><div class="b"><i style="width:' + (top.parts[i] / max * 100) + '%"></i></div><span>' + top.parts[i] + '/' + max + '</span></div>').join('') : '<p class="muted">No signals to score.</p>';
+  const lvList = s.levels || [], lm = s.levels_meta || {};
+  $('#lvlMeta').textContent = lvList.length ? '(' + lvList.length + ' kept from ' + (lm.candidates || 0) + ' candidates, ' + (lm.bars || 0) + ' hourly candles analysed; grade A = better than ~95% of levels found in random prices; it is evidence, not a probability)' : '';
+  const lvRow = l => {
+    const notes = [].concat(l.flipped ? ['flipped' + (l.flip_ago != null ? ' ' + agoText(l.flip_ago) : '')] : [], l.fresh ? ['fresh'] : [], l.sweeps ? ['sweeps ' + l.sweeps] : [], l.breaks ? ['breaks ' + l.breaks] : [], (l.tags || []));
+    const dist = l.dist_atr == null ? '–' : (l.dist_atr > 0 ? '+' : '') + l.dist_atr + ' ATR';
+    return '<tr><td><span class="pill ' + (l.role === 'S' ? 'bull' : 'bear') + '">' + (l.role === 'S' ? 'Support' : 'Resistance') + '</span></td><td class="num"><b>$' + money(l.price) + '</b></td><td>' + esc(l.grade) + '</td><td class="num">' + l.score + '</td><td class="num">' + l.visits + ' / ' + l.candles + '</td><td class="num">' + (l.hold == null ? '–' : l.hold + '%') + '</td><td class="num">' + dist + '</td><td class="muted small">' + esc(notes.join(', ')) + '</td></tr>';
+  };
+  const above = lvList.filter(l => l.price >= s.price), below = lvList.filter(l => l.price < s.price);
+  $('#lvls').innerHTML = lvList.length ? above.map(lvRow).join('') + '<tr><td colspan="8" class="muted small" style="text-align:center">— current price $' + money(s.price) + ' —</td></tr>' + below.map(lvRow).join('') : '<tr><td colspan="8" class="muted">No levels yet. They appear after the next scan.</td></tr>';
   $('#sigs').innerHTML = sigs.map(g => {
     const extra = g.zone ? ' <span class="muted small">gap ' + money(g.zone[0]) + ' to ' + money(g.zone[1]) + ', ' + esc(g.status) + '</span>' : g.price_vs_cloud ? ' <span class="muted small">price ' + esc(g.price_vs_cloud) + ' cloud</span>' : '';
     const cf = g.confirm ? '<span class="pill ' + (g.confirm === 'confirmed' ? 'bull' : g.confirm === 'failed' ? 'bear' : 'none') + '">' + esc(g.confirm) + '</span>' : '<span class="muted">n/a</span>';

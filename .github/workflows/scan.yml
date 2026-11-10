@@ -84,3 +84,35 @@ jobs:
           git rebase --onto "$ROOT" "$OLDEST" HEAD
           # --force-with-lease refuses to overwrite if someone pushed in the meantime
           git push --force-with-lease origin "HEAD:${GITHUB_REF_NAME}"
+
+  # Publishes the website from the newest commit. Pushes made by the bot do not start other workflows, so the scan
+  # workflow publishes the site itself (needs Settings -> Pages -> Source = "GitHub Actions").
+  deploy:
+    needs: scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}      # the branch tip as it is NOW, including the commit the scan just pushed
+      - name: Collect the website files
+        run: |
+          mkdir _site
+          cp -r index.html main-dashboard stock assets shared-data docs .nojekyll _site/ 2>/dev/null || true
+          ls -R _site | head -30
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
